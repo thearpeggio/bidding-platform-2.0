@@ -1,0 +1,91 @@
+.container-box {
+  margin-top: 8%;
+}
+.heading-text {
+  justify-content: center;
+  text-align: center;
+  margin-bottom: 50px;
+}
+.row-container {
+  margin-top: 10px;
+}
+.headline-text {
+  justify-content: center;
+  text-align: center;
+  font-size: 19px;
+  font-weight: 400;
+}
+.price-text {
+  text-align: center;
+}
+.price-container {
+  justify-content: space-evenly;
+  text-align: center;
+  flex-direction: row;
+  display: flex;
+}
+.stop-button {
+  margin-left: 10px;
+}
+.add-button {
+  margin-left: 50%;
+}
+.bidder-buttton {
+  color: aliceblue;
+  padding: 9px;
+  background-color: #0d6efd;
+  margin-left: 10px;
+  border-radius: 7px;
+  text-decoration: none;
+  padding-left: 75px;
+  padding-right: 75px;
+}
+.back-button {
+  text-align: center;
+  flex-direction: row;
+  display: flex;
+}
+.auction-button {
+  width: "28vh";
+}
+.all-button {
+  width: 100%;
+}
+.extra-button {
+  margin-left: 10px;
+}
+.card {
+  width: 40%;
+  height: 10vh;
+}
+.product-name {
+  margin-left: 10px;
+  color: cornflowerblue;
+  font-weight: bolder;
+}
+.current-status {
+  margin-left: 10px;
+  color: rgb(243, 82, 82);
+  font-weight: bolder;
+}
+.price-boxien {
+  width: 10%;
+}
+/* Responsive Styles */
+@media (max-width: 768px) {
+  .card {
+    width: 80%;
+  }
+  .add-button {
+    margin-left: 35%;
+  }
+}
+
+@media (max-width: 576px) {
+  .card {
+    width: 100%;
+  }
+  .add-button {
+    margin-left: 40%;
+  }
+}
