@@ -40,7 +40,10 @@ const notifyWssByAuction = (auctionId) => {
 };
 
 io.on("connect", async function (socket) {
+  // This is not async, why use await?
   const getAuction = await getAuctionData();
+  // on("connect") event is only fired once when client connect
+  // how is the state broadcasted after that? (like it is with the websocket using notifyWssByAuction in the API endpoints)
   socket.broadcast.emit("getAuction", getAuction);
 
   const getBid = await getBidData();
@@ -48,6 +51,7 @@ io.on("connect", async function (socket) {
 });
 
 const getBidData = () => {
+  // When is this supposed to fail?
   try {
     return bids;
   } catch (error) { }
@@ -193,6 +197,8 @@ const { PORT = 5000 } = process.env;
 //   console.log();
 //   console.log(`  > Local: \x1b[36mhttp://localhost:\x1b[1m${PORT}/\x1b[0m`);
 // });
+
+// Why change this? Isn't it causing issues to server `server` instead of express `app` ?
 
 server.listen(PORT, () => {
   console.log(`  App running in port ${PORT}`);
