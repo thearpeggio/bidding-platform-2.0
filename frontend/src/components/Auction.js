@@ -21,7 +21,13 @@ import { Link } from "react-router-dom";
 const ENDPOINT = "http://localhost:5000";
 let socket;
 
+// See comments in Bidder.js that also apply here
+
+// The code that is similar should be raised in Home.js, especially auth, and shared bidding state/socket if they dont differ much
+
+// Name is a bit inconsistent Bidder vs Auction. I think it would make more sense to have Clerk/Bidder, or AuctionFront/AuctionBack or something like that
 const Auction = () => {
+  // Suggestion: `clerkName`
   const [auctioneerName, setAuctioneerName] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [itemName, setItemName] = useState("");
@@ -72,6 +78,7 @@ const Auction = () => {
     const data = {
       name: itemName,
       price: startingPrice,
+      // This is not documented in API and seem redundant with status
       buttonStatus: "Start",
     };
     await api.post("auctions", data);
@@ -110,6 +117,8 @@ const Auction = () => {
     }, [1000]);
   };
 
+  // This should be managed by handleAuctionStatus('accepting_bid')
+  // Instead of extra field that seems related to UI logic
   const handleStartButtonClick = async (event) => {
     event.preventDefault();
     const data = {
@@ -153,6 +162,7 @@ const Auction = () => {
       <h1 className="heading-text">Bidding Platform 2.0</h1>
 
       <div>
+        {/* I think Row has to be direct child to Container, as per the docs it uses flexbox and here the parent div is not flex */}
         <Row>
           <Col>
             <Card>
@@ -273,11 +283,14 @@ const Auction = () => {
                       : handleStartButtonClick
                   }
                   disabled={
+                    // Weird condition you have there :)
+                    // Can it be just `auctions.length > 0` ?
+                    // (any other case is false)
                     auctions.length === 0
                       ? false
                       : auctions[auctions.length - 1]?.buttonStatus === "Start"
-                        ? false
-                        : false
+                      ? false
+                      : false
                   }
                 >
                   Start Auction
@@ -288,6 +301,7 @@ const Auction = () => {
                   type="button"
                   onClick={() => handleStopButtonClick()}
                   disabled={
+                    // This multi ternary is hard to read, intermediate variable may help here
                     auctions.length === 0
                       ? false
                       : auctions[auctions.length - 1]?.buttonStatus === "Stop"
@@ -310,21 +324,24 @@ const Auction = () => {
                 </p>
                 <hr />
                 <p className="headline-text">Bidding History</p>
-                {bidders
-                  .filter(
-                    (bid) =>
-                      bid.auction_id === auctions[auctions.length - 1]?.id
-                  )
-                  .map((data) => (
-                    <div className="price-container">
-                      <div>
-                        <p>{data.name}</p>
+                {
+                  // Should this go in a useMemo for optimization ?
+                  bidders
+                    .filter(
+                      (bid) =>
+                        bid.auction_id === auctions[auctions.length - 1]?.id
+                    )
+                    .map((data) => (
+                      <div className="price-container">
+                        <div>
+                          <p>{data.name}</p>
+                        </div>
+                        <div>
+                          <p className="product-name">${data.amount}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="product-name">${data.amount}</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))
+                }
               </Form>
             </Modal.Body>
             <Modal.Footer>

@@ -7,6 +7,7 @@ import { useNavigate } from "react-router-dom";
 const Home = () => {
   const navigate = useNavigate();
 
+  // I think those can be inlined in JSX given the small footprint
   const handleAuctionClick = () => {
     navigate("/auction");
   };
