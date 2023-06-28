@@ -23,10 +23,8 @@ const Bidder = () => {
   const [auctions, setAuctions] = useState([]);
   const [bidderName, setBidderName] = useState("");
   const [showBidderModal, setShowBidderModal] = useState(false);
-  const [bidders, setBidders] = useState([]);
+  const [bids, setBids] = useState([]);
   const [bidAmount, setBidAmount] = useState();
-  // This is not used?
-  const [userType, setUserType] = useState();
   const [showValidation, setShowValidation] = useState(false);
   const [bidStatus, setBidStatus] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -34,206 +32,211 @@ const Bidder = () => {
   const [showBidAgainToast, setShowBidAgainToast] = useState(false);
   const [message, setMessage] = useState();
 
-  // A good practive is to name effects functions
-  useEffect(() => {
-    // An optimization would be to raise this socket and associated state/logic in Home.jsx to avoid duplication
-    socket = socketIo(ENDPOINT, { transports: ["websocket"] });
-    let auctionData;
-    socket.on("getAuction", (data) => {
-      setAuctions(data);
-      auctionData = data;
-      if (bidders.length === 0) {
-        setBidAmount(
-          // Isn't this already an integer?
-          data.length !== 0 && parseInt(data[data.length - 1].price) + 100
-        );
+  const AuctioneerName =
+    auctions.length > 0 && auctions[auctions.length - 1]?.name;
+  // socket implemetion logic -----------------------
+  useEffect(
+    function getAuctionAndBids() {
+      socket = socketIo(ENDPOINT, { transports: ["websocket"] });
+      let auctionData;
+      const handleGetAuction = (data) => {
+        setAuctions(data);
+        auctionData = data;
+        if (bids.length === 0) {
+          setBidAmount(
+            data.length !== 0 && Number(data[data.length - 1].price) + 100
+          );
+        }
+      };
+      const handleGetBids = (data) => {
+        setBids(data);
+        if (data.length !== 0) {
+          const lastData = data[data.length - 1];
+          setBidAmount(
+            lastData.auction_id === auctionData[auctionData.length - 1].id
+              ? Number(lastData.amount) + 100
+              : Number(auctionData[auctionData.length - 1].price) + 100
+          );
+        }
+      };
+
+      socket.on("getAuction", handleGetAuction);
+      socket.on("getBids", handleGetBids);
+      // This should only run once, this will become very slow and at some point stop working
+      // Also, adding this dep causes the websocket to reconnect a new instance each time, which is what makes it to work, effectively polling for new data (instead of server-initiated push, see server.js)
+      //// Yes, Socket.io it is a polling approach but I don't think it should become slow and stop working at some point... its a different approach than vanilla WS utilizing a socket server in Node.
+    }, [bidStatus]);
+
+  // localstorage---------------------------------
+  useEffect(
+    function getItemsFromLocalStorage() {
+      const savedBidderName = localStorage.getItem("bidderName");
+      const savedModalState = sessionStorage.getItem("bidderModal");
+      if (savedBidderName) {
+        setBidderName(savedBidderName);
       }
-    });
-    socket.on("getBids", (data) => {
-      //This should be better named setBids
-      setBidders(data);
-      if (data.length !== 0) {
-        setBidAmount(
-          // Store data[data.length - 1] in a var for readbility
-          // Why use a var for auctionData it seems to need complex sync and precedence between getBids and getAuction messages?
-          // Probably simpler to use `auctions` state directly rather than scope var auctionData
-          data[data.length - 1].auction_id ===
-            auctionData[auctionData.length - 1].id
-            ? // Those are already numbers, no need to parse
-              parseInt(data[data.length - 1].amount) + 100
-            : parseInt(auctionData[auctionData.length - 1].price) + 100
-        );
+      if (savedModalState === "true") {
+        setShowBidderModal(true);
       }
-    });
-    // This should only run once, this will become very slow and at some point stop working
-    // Also, adding this dep causes the websocket to reconnect a new instance each time, which is what makes it to work, effectively polling for new data (instead of server-initiated push, see server.js)
-  }, [bidStatus]);
+    }, []);
+  useEffect(
+    function setLocalStorage() {
+      sessionStorage.setItem("bidderModal", showBidderModal.toString());
+    }, [showBidderModal]);
 
-  useEffect(() => {
-    // What is showWonItemToast used for? this logic is pretty hard to read/understand
-    // it seems like showWonItemToast determine that the tost UI is shown, but when toast is displayed, it actually goes away after 3s by itself, leaving `showWonItemToast` to true?
-    if (
-      auctions.length > 0 &&
-      // It could be nice to have the status strings in some global constant
-      auctions[auctions.length - 1].status === "sold" &&
-      bidderName === bidders[bidders.length - 1]?.name &&
-      !showWonItemToast
-    ) {
-      setShowWonItemToast(true);
-      toast.success("Congratulations! You won this item!");
-    } else if (
-      showWonItemToast &&
-      (auctions.length === 0 ||
-        auctions[auctions.length - 1].status !== "sold" ||
-        bidderName !== bidders[bidders.length - 1]?.name)
-    ) {
-      setShowWonItemToast(false);
-    }
-  }, [auctions, bidders, bidderName, showWonItemToast]);
+  // Clear localStorage and sessionStorage---------
+  const handleCloseModal = () => {
+    localStorage.removeItem("bidderName");
+    sessionStorage.removeItem("bidderModal");
+    setShowBidderModal(false);
+  };
 
-  useEffect(() => {
-    if (
-      auctions.length > 0 &&
-      auctions[auctions.length - 1].status === "sold" &&
-      bidders[bidders.length - 1]?.name !== bidderName &&
-      !showBidAgainToast
-    ) {
-      setShowBidAgainToast(true);
+  // You won this item  --------------------------
+  useEffect(
+    function showWonItemToastState() {
+      //// Response =>  The showWonItemToast variable is used to track whether the "Congratulations! You won this item!" toast message should be displayed to the winning bidder.
+      //// It is a state variable that determines the visibility of the toast message.
 
-      toast.warning("This item is sold!");
-    } else if (
-      showBidAgainToast &&
-      (auctions.length === 0 ||
-        auctions[auctions.length - 1].status === "pending" ||
-        bidders[bidders.length - 1]?.name === bidderName)
-    ) {
-      setShowBidAgainToast(false);
-    }
-  }, [auctions, bidders, bidderName, showBidAgainToast]);
+      const isAuctionSoldToBidder =
+        auctions.length > 0 &&
+        auctions[auctions.length - 1]?.status === "sold" &&
+        bidderName === bids[bids.length - 1]?.name;
 
-  useEffect(() => {
-    let hasOutbid = false;
+      if (isAuctionSoldToBidder && !showWonItemToast) {
+        setShowWonItemToast(true);
+        toast.success("Congratulations! You won this item!");
+      } else if (
+        showWonItemToast &&
+        (!isAuctionSoldToBidder ||
+          auctions.length === 0 ||
+          auctions[auctions.length - 1]?.status !== "sold" ||
+          bidderName !== bids[bids.length - 1]?.name)
+      ) {
+        setShowWonItemToast(false);
+      }
+    }, [auctions, bids, bidderName, showWonItemToast]);
 
-    // IIUC that effect logic can be written more simply as follows?
-    // const auction = auctions[auctions.length - 1]
-    // const highbid = bidders.find(a => a.auction_id === auction?.id)
-    // const outbid = auction.status === 'pending' && highbid && highbid.name !== bidderName
+  // sold item ---------------------------
+  useEffect(
+    function isItemSold() {
+      const isAuctionSold =
+        auctions.length > 0 && auctions[auctions.length - 1]?.status === "sold";
+      const isBidderDifferent = bids[bids.length - 1]?.name !== bidderName;
 
-    if (
-      bidders.filter(
-        (data) => data.auction_id === auctions[auctions.length - 1]?.id
-      ).length !== 0 &&
-      auctions[auctions.length - 1]?.status === "pending" &&
-      bidders[bidders.length - 1]?.name !== bidderName
-    ) {
-      // This loops has O(n^2) complexity on bids (n*n iterations), which can be a lot if many bids have been placed
-      // not sure if we need unique bidders here, but it can be optimized
-      // (put ids in a Set?)
-      const uniqueBidders = bidders.filter(
-        (elem, ix) =>
-          bidders.findIndex((elem1) => elem1.name === elem.name) === ix
-      );
+      if (isAuctionSold && isBidderDifferent && !showBidAgainToast) {
+        setShowBidAgainToast(true);
+        toast.warning("This item is sold!");
+      } else if (
+        showBidAgainToast &&
+        (auctions.length === 0 ||
+          auctions[auctions.length - 1]?.status === "pending" ||
+          !isBidderDifferent)
+      ) {
+        setShowBidAgainToast(false);
+      }
+    }, [auctions, bids, bidderName, showBidAgainToast]);
 
-      // I do not understand the logic of this loop (especially the if else if)
-      for (let i = 0; i < uniqueBidders.length; i++) {
-        // This should be stored in a var to avoid many looping
-        // An improved name woudld be `highbid` IIUC
-        const bid = bidders.filter(
-          (data) => data.auction_id === auctions[auctions.length - 1]?.id
+  useEffect(
+    function hasBidderBeenOutbid() {
+      let hasOutbid = false;
+      const auction = auctions[auctions.length - 1];
+
+      if (
+        bids.filter((data) => data.auction_id === auction?.id).length !== 0 &&
+        auction?.status === "pending" &&
+        bids[bids.length - 1]?.name !== bidderName
+      ) {
+        const uniqueBidders = bids.filter(
+          (elem, ix) => bids.findIndex((elem1) => elem1.name === elem.name) === ix
         );
 
-        if (
-          uniqueBidders[i].name === bid[i]?.name &&
-          bid[i]?.name === bidderName
-        ) {
-          hasOutbid = true;
-          break;
-        } else if (
-          uniqueBidders[i].name !== bidders[bidders.length - 1]?.name &&
-          bid[i]?.name === bidderName
-        ) {
-          hasOutbid = true;
-          break;
+        for (let i = 0; i < uniqueBidders.length; i++) {
+          const bid = bids.filter((data) => data.auction_id === auction?.id);
+
+          if (
+            uniqueBidders[i].name === bid[i]?.name &&
+            bid[i]?.name === bidderName
+          ) {
+            hasOutbid = true;
+            break;
+          } else if (
+            uniqueBidders[i].name !== bids[bids.length - 1]?.name &&
+            bid[i]?.name === bidderName
+          ) {
+            hasOutbid = true;
+            break;
+          }
         }
       }
-    }
 
-    if (hasOutbid) {
-      setMessage("You have been outbid! Bid again!");
-      toast.warning("You have been outbid! Bid again!");
-    }
-    // I think this works, but it would probably be easier to have the highBid data somewhere and just use that as a dependency for the outbid logic
-  }, [bidders.length]);
+      if (hasOutbid) {
+        setMessage("You have been outbid! Bid again!");
+        toast.warning("You have been outbid! Bid again!");
+      }
+    }, [bids.length]);
 
-  // Name suggestion: handleLogin
-  // This does not make use of provided session management, the user has to login again after refreshing the page
-  const handleBidderSubmit = async (event) => {
+
+  // login -----------------------------------------
+  const handleLogin = async (event) => {
     event.preventDefault();
     if (bidderName.trim() === "") {
       setShowValidation(true);
       return;
+    } else {
     }
     setIsLoggingIn(true);
-    // This condition seems redundant with the above if?
-    if (bidderName) {
-      setUserType("Bidder");
-      const data = {
-        name: bidderName,
-        userType: "Biddder",
-      };
-      await api.post(`login`, data);
-      setTimeout(() => {
-        // Why wait 2sec here? did it not `await` already for the api call?
-        setIsLoggingIn(false);
-        toast.success("Login successful!");
-        setShowBidderModal(true);
-      }, 2000);
-      // I think that the logic below is more an effect of the log in, rather than part of it
-      setBidAmount(
-        auctions.length > 0 && bidders.length === 0
-          ? parseInt(auctions[auctions.length - 1].price) + 100
-          : bidders[bidders.length - 1]?.auction_id ===
-            auctions[auctions.length - 1]?.id
-          ? bidders.length !== 0 &&
-            parseInt(bidders[bidders.length - 1].amount) + 100
-          : parseInt(auctions[auctions.length - 1].price) + 100
-      );
-    }
+
+    const data = {
+      name: bidderName,
+      userType: "Biddder",
+    };
+    await api.post(`login`, data);
+
+    setIsLoggingIn(false);
+    toast.success("Login successful!");
+    setShowBidderModal(true);
+    document.cookie = `bidderName=${bidderName}; max-age=${7 * 24 * 60 * 60}`;
+    localStorage.setItem("bidderName", bidderName);
+
+    // I think that the logic below is more an effect of the log in, rather than part of it
+    //// Good point, I added here as part of the login, woudld you rather it be broken out?
+    setBidAmount(
+      auctions.length > 0 && bids.length === 0
+        ? Number(auctions[auctions.length - 1]?.price) + 100
+        : bids[bids.length - 1]?.auction_id ===
+          auctions[auctions.length - 1]?.id
+          ? bids.length !== 0 && Number(bids[bids.length - 1].amount) + 100
+          : Number(auctions[auctions.length - 1]?.price) + 100
+    );
   };
 
-  // Name suggestion: handleSubmitBid
-  const handlebidderModalSubmit = async (event) => {
+  const handleSubmitBid = async (event) => {
     // Why use a button with type=submit and then disable this? Probably easier to remove both
+    /// Yeah good point. I am actually seeing now that I need to add some more logic around stopping/stopping auctions in general. I'll come back to this one later.
     event.preventDefault();
     const data = {
-      auction_id: auctions.length > 0 && auctions[auctions.length - 1].id,
+      auction_id: auctions.length > 0 && auctions[auctions.length - 1]?.id,
       amount: bidAmount,
       name: bidderName,
     };
-    // This does not check starting price
     const bidAmountCheck =
-      bidders.length !== 0
-        ? auctions[auctions.length - 1].id ===
-          bidders[bidders.length - 1].auction_id
-          ? bidders[bidders.length - 1]?.amount
+      bids.length > 0
+        ? auctions[auctions.length - 1]?.id === bids[bids.length - 1].auction_id
+          ? bids[bids.length - 1]?.amount
           : auctions[auctions.length - 1]?.price
-        : auctions[auctions.length - 1].price;
+        : auctions[auctions.length - 1]?.price;
     if (bidAmountCheck >= bidAmount) {
       return toast.error("Amount must be more than current price");
     }
     await api.post(`bids`, data);
-    // Not sure why this is needed?
     setBidStatus(true);
-    // Same question as above rel timeout
+    // This setTimeout method is for changing bidStatus value to call useEffect
     setTimeout(() => {
       setBidStatus(false);
       toast.success("Bid successful! You are currently the highest bidder.");
     }, 1000);
   };
-  // Note: this is a bit unusual UI to have a modal open/close act as authenticated/unauthenticated UI
-  const handlebidderModalClose = () => {
-    setShowBidderModal(false);
-  };
+
   const handleNameChange = (event) => {
     if (showValidation) {
       setShowValidation(false);
@@ -259,7 +262,8 @@ const Bidder = () => {
           {showValidation && (
             <Alert variant="danger">Please enter your name.</Alert>
           )}
-          <Form onSubmit={handleBidderSubmit}>
+
+          <Form onSubmit={handleLogin}>
             <Form.Group controlId="auctioneerName" className="mb-3">
               <Form.Label>Name</Form.Label>
               <Form.Control
@@ -289,7 +293,7 @@ const Bidder = () => {
       </Card>
       <Modal
         show={showBidderModal}
-        onHide={handlebidderModalClose}
+        onHide={handleCloseModal}
         backdrop="static"
         centered
       >
@@ -302,80 +306,69 @@ const Bidder = () => {
               <Form.Label>Your Name - </Form.Label>
               <Form.Label className="product-name">{bidderName}</Form.Label>
             </Form.Group>
-            {/* These could be displayed using ternary op */}
             {auctions.length > 0 && (
-              <Form.Group controlId="item-name">
-                <Form.Label>Auction Item - </Form.Label>
-                <Form.Label className="product-name">
-                  <Form.Label>
-                    {
-                      // Redundant condition
-                      auctions.length > 0 && auctions[auctions.length - 1].name
-                    }
+              <>
+                <Form.Group controlId="item-name">
+                  <Form.Label>Auction Item - </Form.Label>
+                  <Form.Label className="product-name">
+                    <Form.Label>{AuctioneerName}</Form.Label>
                   </Form.Label>
-                </Form.Label>
-              </Form.Group>
-            )}
-            {auctions.length === 0 && "There is no Auction item"}
-            {auctions.length > 0 && (
-              <Form.Group controlId="startingPrice" className="mb-3">
-                <Form.Label>Current Price -</Form.Label>
+                </Form.Group>
 
-                {bidders.length !== 0 ? (
-                  <Form.Label className="product-name">
-                    {bidders[bidders.length - 1].auction_id ===
-                      auctions[auctions.length - 1].id
-                      ? "$" + bidders[bidders.length - 1].amount
-                      : auctions[auctions.length - 1].price}
-                  </Form.Label>
-                ) : (
-                  <Form.Label className="product-name">
-                    {" "}
-                    {"$" + auctions[auctions.length - 1]?.price}
-                  </Form.Label>
-                )}
-              </Form.Group>
-            )}
-            {
-              // Condition lready checked, maybe group the common JSX
-              auctions.length > 0 && (
+                <Form.Group controlId="startingPrice" className="mb-3">
+                  <Form.Label>Current Price -</Form.Label>
+
+                  {bids.length !== 0 ? (
+                    <Form.Label className="product-name">
+                      {bids[bids.length - 1].auction_id ===
+                        auctions[auctions.length - 1]?.id
+                        ? "$" + bids[bids.length - 1].amount
+                        : auctions[auctions.length - 1]?.price}
+                    </Form.Label>
+                  ) : (
+                    <Form.Label className="product-name">
+                      {" "}
+                      {"$" + auctions[auctions.length - 1]?.price}
+                    </Form.Label>
+                  )}
+                </Form.Group>
+
                 <Form.Group controlId="item-name">
                   <Form.Label> Auction Item Current Status -</Form.Label>
                   <Form.Label className="current-status">
                     {auctions[auctions.length - 1]?.buttonStatus === "Stop"
                       ? "Stop Auction"
-                      : auctions[auctions.length - 1].status !== "pending"
-                      ? auctions[auctions.length - 1]?.status === "sold"
-                        ? bidderName === bidders[bidders.length - 1]?.name
-                          ? `You won this item for $${
-                              bidders[bidders.length - 1]?.amount
+                      : auctions[auctions.length - 1]?.status !== "pending"
+                        ? auctions[auctions.length - 1]?.status === "sold"
+                          ? bidderName === bids[bids.length - 1]?.name
+                            ? `You won this item for $${bids[bids.length - 1]?.amount
                             }!`
+                            : auctions[auctions.length - 1]?.status
                           : auctions[auctions.length - 1]?.status
-                        : auctions[auctions.length - 1]?.status
-                      : bidders[bidders.length - 1]?.name === bidderName
-                      ? "You are the highest bidder."
-                      : bidders.filter(
-                          (data) =>
-                            data.auction_id ===
-                            auctions[auctions.length - 1]?.id
-                        ).length === 0
-                      ? "Accepting Bids"
-                      : !message
-                      ? "Accepting Bids"
-                      : message}
+                        : bids[bids.length - 1]?.name === bidderName
+                          ? "You are the highest bidder."
+                          : bids.filter(
+                            (data) =>
+                              data.auction_id ===
+                              auctions[auctions.length - 1]?.id
+                          ).length === 0
+                            ? "Accepting Bids"
+                            : !message
+                              ? "Accepting Bids"
+                              : message}
                   </Form.Label>
                   <hr />
                   <p className="headline-text">Bidding History</p>
-                  {bidders[bidders.length - 1]?.auction_id ===
-                  auctions[auctions.length - 1].id ? (
+                  {bids[bids.length - 1]?.auction_id ===
+                    auctions[auctions.length - 1]?.id ? (
                     <div className="price-container">
                       <div>
-                        <p>{bidders[bidders.length - 1].name}</p>
+                        <p>{bids[bids.length - 1].name}</p>
                       </div>
                       <div>
                         <p className="product-name">
                           {" "}
-                          {"$" + bidders[bidders.length - 1].amount}
+                          {"$" + bids[bids.length - 1].amount}
                         </p>
                       </div>
                     </div>
@@ -383,8 +376,8 @@ const Bidder = () => {
                     ""
                   )}
                 </Form.Group>
-              )
-            }
+              </>
+            )}
             <hr />${" "}
             <input
               type="number"
@@ -392,11 +385,11 @@ const Bidder = () => {
               style={{ width: "30%" }}
               disabled={
                 auctions.length !== 0 &&
-                  auctions[auctions.length - 1].buttonStatus === "Stop"
+                  auctions[auctions.length - 1]?.buttonStatus === "Stop"
                   ? true
                   : auctions.length === 0
                     ? true
-                    : auctions[auctions.length - 1].status !== "pending" && true
+                    : auctions[auctions.length - 1]?.status !== "pending" && true
               }
               value={bidAmount}
               onChange={(e) => setBidAmount(e.target.value)}
@@ -405,14 +398,14 @@ const Bidder = () => {
               variant="primary"
               type="submit"
               className="extra-button"
-              onClick={(e) => handlebidderModalSubmit(e)}
+              onClick={(e) => handleSubmitBid(e)}
               disabled={
                 auctions.length !== 0 &&
-                  auctions[auctions.length - 1].buttonStatus === "Stop"
+                  auctions[auctions.length - 1]?.buttonStatus === "Stop"
                   ? true
                   : auctions.length === 0
                     ? true
-                    : auctions[auctions.length - 1].status !== "pending" && true
+                    : auctions[auctions.length - 1]?.status !== "pending" && true
               }
             >
               Bid
@@ -421,15 +414,15 @@ const Bidder = () => {
               variant="btn btn-outline-secondary"
               className="extra-button"
               onClick={() => {
-                setBidAmount(parseInt(bidAmount) + 100);
+                setBidAmount(Number(bidAmount) + 100);
               }}
               disabled={
                 auctions.length !== 0 &&
-                  auctions[auctions.length - 1].buttonStatus === "Stop"
+                  auctions[auctions.length - 1]?.buttonStatus === "Stop"
                   ? true
                   : auctions.length === 0
                     ? true
-                    : auctions[auctions.length - 1].status !== "pending" && true
+                    : auctions[auctions.length - 1]?.status !== "pending" && true
               }
             >
               +100
@@ -437,14 +430,14 @@ const Bidder = () => {
             <Button
               variant="btn btn-outline-secondary"
               className="extra-button"
-              onClick={() => setBidAmount(parseInt(bidAmount) + 200)}
+              onClick={() => setBidAmount(Number(bidAmount) + 200)}
               disabled={
                 auctions.length !== 0 &&
-                  auctions[auctions.length - 1].buttonStatus === "Stop"
+                  auctions[auctions.length - 1]?.buttonStatus === "Stop"
                   ? true
                   : auctions.length === 0
                     ? true
-                    : auctions[auctions.length - 1].status !== "pending" && true
+                    : auctions[auctions.length - 1]?.status !== "pending" && true
               }
             >
               +200
@@ -453,15 +446,15 @@ const Bidder = () => {
               variant="danger"
               className="extra-button"
               onClick={() =>
-                setBidAmount(bidders[bidders.length - 1].amount + 100)
+                setBidAmount(Number(bids[bids.length - 1].amount) + 100)
               }
               disabled={
                 auctions.length !== 0 &&
-                  auctions[auctions.length - 1].buttonStatus === "Stop"
+                  auctions[auctions.length - 1]?.buttonStatus === "Stop"
                   ? true
                   : auctions.length === 0
                     ? true
-                    : auctions[auctions.length - 1].status !== "pending" && true
+                    : auctions[auctions.length - 1]?.status !== "pending" && true
               }
             >
               Reset

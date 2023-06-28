@@ -1,19 +1,11 @@
 import React from "react";
 import { Card, Button, Form, Row, Col, Container } from "react-bootstrap";
 import "./style.css";
-
 import { useNavigate } from "react-router-dom";
 
 const Home = () => {
   const navigate = useNavigate();
 
-  // I think those can be inlined in JSX given the small footprint
-  const handleAuctionClick = () => {
-    navigate("/auction");
-  };
-  const handleBidderClick = () => {
-    navigate("/bidder");
-  };
   return (
     <Container className="container-box">
       <h1 className="heading-text">Bidding Platform 2.0</h1>
@@ -24,7 +16,6 @@ const Home = () => {
               <Card.Body>
                 <Card.Title>Choose Your Login</Card.Title>
                 <hr />
-
                 <Form>
                   <Form.Group
                     controlId="auctioneerName"
@@ -35,7 +26,7 @@ const Home = () => {
                       <Button
                         variant="primary"
                         className="all-button"
-                        onClick={handleAuctionClick}
+                        onClick={() => navigate("/clerk")}
                       >
                         Clerk Login
                       </Button>
@@ -43,7 +34,7 @@ const Home = () => {
                     <Col>
                       <Button
                         className="all-button"
-                        onClick={handleBidderClick}
+                        onClick={() => navigate("/bidder")}
                       >
                         Bidder Login
                       </Button>

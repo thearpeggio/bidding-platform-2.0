@@ -1,5 +1,5 @@
 import "./App.css";
-import Auction from "./components/Auction";
+import Clerk from "./components/Clerk";
 import Bidder from "./components/Bidder";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import Home from "./components/Home";
@@ -9,7 +9,7 @@ const App = () => {
     <Router>
       <Routes>
         <Route path="/" element={<Home />} />
-        <Route path="/auction" element={<Auction />} />
+        <Route path="/Clerk" element={<Clerk />} />
         <Route path="/bidder" element={<Bidder />} />
       </Routes>
     </Router>

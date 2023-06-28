@@ -39,22 +39,23 @@ const notifyWssByAuction = (auctionId) => {
   wssClients.forEach((ws) => ws.send(JSON.stringify(auction)));
 };
 
-io.on("connect", async function (socket) {
-  // This is not async, why use await?
-  const getAuction = await getAuctionData();
+io.on("connect", function (socket) {
+  const getAuction = getAuctionData();
   // on("connect") event is only fired once when client connect
   // how is the state broadcasted after that? (like it is with the websocket using notifyWssByAuction in the API endpoints)
+  //// Socket.io has a slightly different approach than WS ~ https://socket.io/docs/v3/broadcasting-events/
   socket.broadcast.emit("getAuction", getAuction);
 
-  const getBid = await getBidData();
+  const getBid = getBidData();
   socket.broadcast.emit("getBids", getBid);
 });
 
 const getBidData = () => {
-  // When is this supposed to fail?
   try {
     return bids;
-  } catch (error) { }
+  } catch (error) {
+    return error.message;
+  }
 };
 
 const getAuctionData = () => {
@@ -191,15 +192,8 @@ app.get("/*", (_req, res) => {
 });
 
 const { PORT = 5000 } = process.env;
-// app.listen(PORT, () => {
-//   console.log();
-//   console.log(`  App running in port ${PORT}`);
-//   console.log();
-//   console.log(`  > Local: \x1b[36mhttp://localhost:\x1b[1m${PORT}/\x1b[0m`);
-// });
-
 // Why change this? Isn't it causing issues to server `server` instead of express `app` ?
-
+// No issues that I'm aware of (seems to be working fine). I used socket.io in server that's why I changed to server to 'server' instead of 'app' .
 server.listen(PORT, () => {
   console.log(`  App running in port ${PORT}`);
   console.log();
